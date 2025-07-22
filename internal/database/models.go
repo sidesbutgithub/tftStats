@@ -4,14 +4,10 @@
 
 package database
 
-import (
-	"database/sql"
-)
-
 type Unit struct {
 	ID        int32
-	Unitname  sql.NullString
-	Starlevel sql.NullInt16
+	Unitname  string
+	Starlevel int16
 	Items     []string
-	Placement sql.NullInt16
+	Placement int16
 }

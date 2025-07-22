@@ -7,28 +7,25 @@ package database
 
 import (
 	"context"
-	"database/sql"
 
 	"github.com/lib/pq"
 )
 
 const insertUnit = `-- name: InsertUnit :one
-INSERT INTO units(id, unitName, starLevel, items, placement)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO units(unitName, starLevel, items, placement)
+VALUES ($1, $2, $3, $4)
 RETURNING id, unitname, starlevel, items, placement
 `
 
 type InsertUnitParams struct {
-	ID        int32
-	Unitname  sql.NullString
-	Starlevel sql.NullInt16
+	Unitname  string
+	Starlevel int16
 	Items     []string
-	Placement sql.NullInt16
+	Placement int16
 }
 
 func (q *Queries) InsertUnit(ctx context.Context, arg InsertUnitParams) (Unit, error) {
 	row := q.db.QueryRowContext(ctx, insertUnit,
-		arg.ID,
 		arg.Unitname,
 		arg.Starlevel,
 		pq.Array(arg.Items),
