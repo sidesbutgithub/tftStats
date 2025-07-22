@@ -1,12 +1,18 @@
 package main
 
-import ("fmt"
+import ( /*
 		"net/http"
-		"os"
-		"log"
-		"io"
-		"github.com/joho/godotenv"
 		"encoding/json"
+		"io"*/
+	"context"
+	"database/sql"
+	"fmt"
+	"log"
+	"os"
+
+	"github.com/joho/godotenv"
+	_ "github.com/lib/pq"
+	"github.com/sidesbutgithub/tftStats/matchCrawler/internal/database"
 )
 
 type LeagueResponse struct {
@@ -27,37 +33,70 @@ type LeagueResponse struct {
 	} `json:"entries"`
 }
 
-
-
-func main(){
+func main() {
 	err := godotenv.Load()
-	if err != nil{
+	if err != nil {
 		log.Fatal("Failed to load .env file")
 	}
 
-	riotApiKey := os.Getenv("RIOT_API_KEY")
-	res, err := http.Get(fmt.Sprintf("https://na1.api.riotgames.com/tft/league/v1/challenger?queue=RANKED_TFT&api_key=%s", riotApiKey))
-	if err != nil{
-		log.Fatal("Failed to get data")
-	}
-	defer res.Body.Close()
-	b, err := io.ReadAll(res.Body)
-	if err != nil{
-		log.Fatal("Failed to read body")
+	dbURI := os.Getenv("DB_URI")
+
+	conn, err := sql.Open("postgres", dbURI)
+	if err != nil {
+		log.Fatal("failed to connect to postgres database")
 	}
 
-	var bodyData LeagueResponse
+	queries := database.New(conn)
+	testItems := make([]string, 1)
 
-	err = json.Unmarshal(b, &bodyData)
-	if err != nil{
-		log.Fatal("Failed to unmarshall body data")
+	unit, err := queries.InsertUnit(context.TODO(), database.InsertUnitParams{
+		ID: int32(91),
+		Unitname: sql.NullString{
+			String: "testName",
+			Valid:  true,
+		},
+		Starlevel: sql.NullInt16{
+			Int16: int16(3),
+			Valid: true,
+		},
+		Items: testItems,
+		Placement: sql.NullInt16{
+			Int16: int16(8),
+			Valid: true,
+		},
+	})
+	if err != nil {
+		fmt.Println(err)
+		log.Fatal("error writing test data to database")
 	}
 
-	playerUUIDs := make([]string, 0, len(bodyData.Entries))
+	fmt.Println(unit)
 
-	for _, player := range bodyData.Entries {
-		playerUUIDs = append(playerUUIDs, player.Puuid)
-	}
+	/*
+		riotApiKey := os.Getenv("RIOT_API_KEY")
+		res, err := http.Get(fmt.Sprintf("https://na1.api.riotgames.com/tft/league/v1/challenger?queue=RANKED_TFT&api_key=%s", riotApiKey))
+		if err != nil{
+			log.Fatal("Failed to get data")
+		}
+		defer res.Body.Close()
+		b, err := io.ReadAll(res.Body)
+		if err != nil{
+			log.Fatal("Failed to read body")
+		}
 
-	fmt.Println(len(playerUUIDs))
+		var bodyData LeagueResponse
+
+		err = json.Unmarshal(b, &bodyData)
+		if err != nil{
+			log.Fatal("Failed to unmarshall body data")
+		}
+
+		playerUUIDs := make([]string, 0, len(bodyData.Entries))
+
+		for _, player := range bodyData.Entries {
+			playerUUIDs = append(playerUUIDs, player.Puuid)
+		}
+
+		fmt.Println(len(playerUUIDs))
+	*/
 }
