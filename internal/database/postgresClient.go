@@ -3,7 +3,6 @@ package database
 import (
 	"context"
 	"database/sql"
-	"errors"
 )
 
 type PostgresDB struct {
@@ -14,7 +13,7 @@ type PostgresDB struct {
 func (db *PostgresDB) ConnectPostgres(postgresURI string) error {
 	conn, err := sql.Open("postgres", postgresURI)
 	if err != nil {
-		return errors.New("unable to connect to postgres")
+		return err
 	}
 	db.Client = New(conn)
 	db.Context = context.Background()
