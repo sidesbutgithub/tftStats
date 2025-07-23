@@ -74,15 +74,15 @@ func (db *RedisDB) CheckMatchVisited(matchId string) (bool, error) {
 }
 
 // Queue for players to visit
-func (db *RedisDB) EnqueuePlayers(Puuids []string) error {
+func (db *RedisDB) EnqueuePlayer(Puuid string) error {
 	if db.Client == nil {
 		return errors.New("database not connected")
 	}
-	err := db.Client.LPush(db.Context, "playersQueue", Puuids).Err()
+	err := db.Client.LPush(db.Context, "playersQueue", Puuid).Err()
 	return err
 }
 
-func (db *RedisDB) DequeuePlayers() (string, error) {
+func (db *RedisDB) DequeuePlayer() (string, error) {
 	if db.Client == nil {
 		return "", errors.New("database not connected")
 	}
@@ -101,15 +101,15 @@ func (db *RedisDB) DequeuePlayers() (string, error) {
 }
 
 // Queue for matches to visit
-func (db *RedisDB) EnqueueMatches(MatchIds []string) error {
+func (db *RedisDB) EnqueueMatch(MatchId string) error {
 	if db.Client == nil {
 		return errors.New("database not connected")
 	}
-	err := db.Client.LPush(db.Context, "matchesQueue", MatchIds).Err()
+	err := db.Client.LPush(db.Context, "matchesQueue", MatchId).Err()
 	return err
 }
 
-func (db *RedisDB) DequeueMatches() (string, error) {
+func (db *RedisDB) DequeueMatch() (string, error) {
 	if db.Client == nil {
 		return "", errors.New("database not connected")
 	}

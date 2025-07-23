@@ -1,18 +1,13 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
-	"io"
 	"log"
-	"net/http"
 	"os"
+	"strconv"
 
 	"github.com/joho/godotenv"
-	_ "github.com/lib/pq"
-	"github.com/redis/go-redis/v9"
+	"github.com/sidesbutgithub/tftStats/matchCrawler/internal/crawler"
 	"github.com/sidesbutgithub/tftStats/matchCrawler/internal/database"
-	"github.com/sidesbutgithub/tftStats/matchCrawler/internal/models"
 )
 
 func main() {
@@ -21,49 +16,64 @@ func main() {
 		log.Fatal("Failed to load .env file")
 	}
 
-	//connect to postgresdb
+	//connect to postgres
 	dbURI := os.Getenv("DB_URI")
-
-	var pgDb database.PostgresDB
-
-	err = pgDb.ConnectPostgres(dbURI)
+	var Pgdb database.PostgresDB
+	defer Pgdb.CloseConn()
+	err = Pgdb.ConnectPostgres(dbURI)
 	if err != nil {
-		log.Fatal("Failed to connect to postgres")
+		log.Fatal("Failed to connect to Postgres DB")
+	}
+
+	//connect to redis
+	var Rdb database.RedisDB
+	RdbHost, RdbPort, RdbPW := os.Getenv("REDIS_HOST"), os.Getenv("REDIS_PORT"), os.Getenv("REDIS_PASSWORD")
+	RdbDbNum, err := strconv.Atoi(os.Getenv("REDIS_DB_NUM"))
+	if err != nil {
+		log.Fatal("unable to parse rdb num")
+	}
+
+	Rdb.ConnectRedis(RdbHost, RdbPort, RdbPW, RdbDbNum)
+	if err != nil {
+		log.Print(RdbHost, RdbPort, RdbPW, RdbDbNum)
+		log.Fatal("Failed to connect to Redis DB")
 	}
 
 	riotApiKey := os.Getenv("RIOT_API_KEY")
-	res, err := http.Get(fmt.Sprintf("https://americas.api.riotgames.com/tft/match/v1/matches/NA1_5322362987?api_key=%s", riotApiKey))
-	if err != nil {
-		log.Fatal("Failed to get data")
-	}
-	defer res.Body.Close()
-	b, err := io.ReadAll(res.Body)
-	if err != nil {
-		log.Fatal("Failed to read body")
+
+	matchCrawler := &crawler.Crawler{
+		Queue:      &Rdb,
+		DB:         &Pgdb,
+		RiotApiKey: riotApiKey,
+		NumWorkers: 10,
 	}
 
-	var bodyData models.MatchResponse
+	matchCrawler.AddPlayer(os.Getenv("STARTING_PUUID"))
 
-	err = json.Unmarshal(b, &bodyData)
+	//sample player
+	currPuuid, err := matchCrawler.Queue.DequeuePlayer()
 	if err != nil {
-		log.Fatal("Failed to unmarshall body data")
+		log.Print(err)
+		log.Fatal("failed to dequeue playerID")
 	}
-
-	for _, participant := range bodyData.Info.Participants {
-
-		if err == redis.Nil {
-			fmt.Println("participant not in queue")
-		} else if err != nil {
-			fmt.Println(err)
-			log.Fatal("unkown error occured")
+	log.Print(currPuuid)
+	matchCrawler.GetMatches(currPuuid)
+	for i := 0; i < 20; i++ {
+		currMatch, err := matchCrawler.Queue.DequeueMatch()
+		if err != nil {
+			log.Print(err)
+			log.Print(i)
+			log.Fatal("failed to dequeue matchID")
 		}
-
-		for _, unit := range participant.Units {
-			_, err := pgDb.InsertUnit(unit.CharacterID, int16(unit.Tier), unit.ItemNames, int16(participant.Placement))
-			if err != nil {
-				fmt.Println(err)
-				log.Fatal("error writing test data to database")
-			}
+		err = matchCrawler.GetMatchData(currMatch)
+		if err != nil {
+			log.Print(err)
+			log.Print(i)
+			log.Print(currMatch)
+			log.Fatal("failed to get match data for matchID")
 		}
 	}
+
+	log.Print("finished without issues")
+	//main loop
 }

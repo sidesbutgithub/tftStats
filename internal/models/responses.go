@@ -75,3 +75,5 @@ type MatchResponse struct {
 		TftSetNumber   int    `json:"tft_set_number"`
 	} `json:"info"`
 }
+
+type ListMatches []string
