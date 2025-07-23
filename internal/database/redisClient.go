@@ -126,3 +126,21 @@ func (db *RedisDB) DequeueMatch() (string, error) {
 	}
 	return puuid, err
 }
+
+func (db *RedisDB) PlayersQueueLen() (int, error) {
+	queueLen, err := db.Client.LLen(db.Context, "playersQueue").Result()
+	if err != nil {
+		log.Print("error in getting length of player queue")
+		return 0, err
+	}
+	return int(queueLen), nil
+}
+
+func (db *RedisDB) MatchesQueueLen() (int, error) {
+	queueLen, err := db.Client.LLen(db.Context, "matchesQueue").Result()
+	if err != nil {
+		log.Print("error in getting length of matches queue")
+		return 0, err
+	}
+	return int(queueLen), nil
+}

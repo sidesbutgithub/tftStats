@@ -57,6 +57,7 @@ func (crawlerInst *Crawler) AddMatch(matchId string) error {
 	return nil
 }
 
+/*
 func (crawlerInst *Crawler) InitializaPlayerQueue(initialQueueLen int) error {
 	crawlerInst.mu.Lock()
 	defer crawlerInst.mu.Unlock()
@@ -116,7 +117,7 @@ func (crawlerInst *Crawler) InitializaPlayerQueue(initialQueueLen int) error {
 	}
 	return nil
 }
-
+*/
 // adds the data of a given match to the database and adds all the participants of that match
 func (crawlerInst *Crawler) GetMatchData(matchID string) error {
 	/*
@@ -135,8 +136,6 @@ func (crawlerInst *Crawler) GetMatchData(matchID string) error {
 			return err
 		}
 	*/
-	crawlerInst.mu.Lock()
-	defer crawlerInst.mu.Unlock()
 	limitHits := 0
 	var res *http.Response
 	var err error
@@ -158,9 +157,12 @@ func (crawlerInst *Crawler) GetMatchData(matchID string) error {
 		if limitHits == 1 {
 			log.Print("hit lower rate limit 20 reqs/s, sleeping 1s before retrying")
 			time.Sleep(time.Second)
+			log.Print("awake, retrying http request")
 		} else if limitHits < 4 { //possibly set max retries constant
+			log.Printf("https://americas.api.riotgames.com/tft/match/v1/matches/%s?api_key=%s", matchID, crawlerInst.RiotApiKey)
 			log.Print("hit greater rate limit 100 reqs/2 mins, sleeping 2 mins before retrying")
 			time.Sleep(2 * time.Minute)
+			log.Print("awake, retrying http request")
 		} else {
 			log.Print("hit rate limit max number of times, no more retying, quiting program")
 			return errors.New("rate limit exceeded excessively")
@@ -225,8 +227,6 @@ func (crawlerInst *Crawler) GetMatches(puuid string) error {
 			return err
 		}
 	*/
-	crawlerInst.mu.Lock()
-	defer crawlerInst.mu.Unlock()
 	limitHits := 0
 	var res *http.Response
 	var err error
@@ -248,9 +248,12 @@ func (crawlerInst *Crawler) GetMatches(puuid string) error {
 		if limitHits == 1 {
 			log.Print("hit lower rate limit 20 reqs/s, sleeping 1s before retrying")
 			time.Sleep(time.Second)
+			log.Print("awake, retrying http request")
 		} else if limitHits < 4 { //possibly set max retries constant
+			log.Printf("https://americas.api.riotgames.com/tft/match/v1/matches/by-puuid/%s/ids?start=0&count=20&api_key=%s", puuid, crawlerInst.RiotApiKey)
 			log.Print("hit greater rate limit 100 reqs/2 mins, sleeping 2 mins before retrying")
 			time.Sleep(2 * time.Minute)
+			log.Print("awake, retrying http request")
 		} else {
 			log.Print("hit rate limit max number of times, no more retying, quiting program")
 			return errors.New("rate limit exceeded excessively")

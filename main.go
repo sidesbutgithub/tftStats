@@ -47,33 +47,73 @@ func main() {
 		RiotApiKey: riotApiKey,
 		NumWorkers: 10,
 	}
-
-	matchCrawler.AddPlayer(os.Getenv("STARTING_PUUID"))
-
-	//sample player
-	currPuuid, err := matchCrawler.Queue.DequeuePlayer()
+	//first run of crawler on each container will be same puuid
+	startingPuuid := os.Getenv("STARTING_PUUID")
+	initialVisited, err := matchCrawler.Queue.CheckPlayerVisited(startingPuuid)
 	if err != nil {
 		log.Print(err)
-		log.Fatal("failed to dequeue playerID")
-	}
-	log.Print(currPuuid)
-	matchCrawler.GetMatches(currPuuid)
-	for i := 0; i < 20; i++ {
-		currMatch, err := matchCrawler.Queue.DequeueMatch()
-		if err != nil {
-			log.Print(err)
-			log.Print(i)
-			log.Fatal("failed to dequeue matchID")
-		}
-		err = matchCrawler.GetMatchData(currMatch)
-		if err != nil {
-			log.Print(err)
-			log.Print(i)
-			log.Print(currMatch)
-			log.Fatal("failed to get match data for matchID")
-		}
+		log.Fatal("error checking if initial player in visited")
 	}
 
-	log.Print("finished without issues")
+	if !initialVisited {
+		matchCrawler.AddPlayer(os.Getenv("STARTING_PUUID"))
+	}
+
+	maxDepth := 3
+	currDepth := 0
 	//main loop
+	for {
+
+		if currDepth >= maxDepth {
+			log.Print("finished all layers without issues")
+			return
+		}
+		playersLen, err := matchCrawler.Queue.PlayersQueueLen()
+		if err != nil {
+			log.Print(err)
+			log.Fatal("error getting len of player queue")
+		}
+		for playersLen > 0 {
+			currPuuid, err := matchCrawler.Queue.DequeuePlayer()
+			if err != nil {
+				log.Print(err)
+				log.Fatal("error poping from player queue")
+			}
+			err = matchCrawler.GetMatches(currPuuid)
+			if err != nil {
+				log.Print(err)
+				log.Fatal("error getting matches for given playerID")
+			}
+			playersLen, err = matchCrawler.Queue.PlayersQueueLen()
+			if err != nil {
+				log.Print(err)
+				log.Fatal("error getting len of player queue")
+			}
+		}
+		matchesLen, err := matchCrawler.Queue.MatchesQueueLen()
+		if err != nil {
+			log.Print(err)
+			log.Fatal("error getting len of match queue")
+		}
+		for matchesLen > 0 {
+			currMatchId, err := matchCrawler.Queue.DequeueMatch()
+			if err != nil {
+				log.Print(err)
+				log.Fatal("error poping from match queue")
+			}
+			err = matchCrawler.GetMatchData(currMatchId)
+			if err != nil {
+				log.Print(err)
+				log.Fatal("error getting match data for given matchId")
+			}
+			matchesLen, err = matchCrawler.Queue.MatchesQueueLen()
+			if err != nil {
+				log.Print(err)
+				log.Fatal("error getting len of match queue")
+			}
+		}
+		currDepth += 1
+		log.Printf("finished %d layers without issues", currDepth)
+	}
+
 }
