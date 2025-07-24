@@ -4,10 +4,12 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"sync"
 
 	"github.com/joho/godotenv"
 	"github.com/sidesbutgithub/tftStats/matchCrawler/internal/crawler"
 	"github.com/sidesbutgithub/tftStats/matchCrawler/internal/database"
+	"github.com/sidesbutgithub/tftStats/matchCrawler/internal/databaseClients"
 )
 
 func main() {
@@ -18,7 +20,7 @@ func main() {
 
 	//connect to postgres
 	dbURI := os.Getenv("DB_URI")
-	var Pgdb database.PostgresDB
+	var Pgdb databaseClients.PostgresDB
 	defer Pgdb.CloseConn()
 	err = Pgdb.ConnectPostgres(dbURI)
 	if err != nil {
@@ -26,7 +28,7 @@ func main() {
 	}
 
 	//connect to redis
-	var Rdb database.RedisDB
+	var Rdb databaseClients.RedisDB
 	RdbHost, RdbPort, RdbPW := os.Getenv("REDIS_HOST"), os.Getenv("REDIS_PORT"), os.Getenv("REDIS_PASSWORD")
 	RdbDbNum, err := strconv.Atoi(os.Getenv("REDIS_DB_NUM"))
 	if err != nil {
@@ -42,76 +44,80 @@ func main() {
 	riotApiKey := os.Getenv("RIOT_API_KEY")
 
 	matchCrawler := &crawler.Crawler{
-		Queue:      &Rdb,
-		DB:         &Pgdb,
+		Mu:         &sync.Mutex{},
+		Wg:         &sync.WaitGroup{},
+		Rdb:        &Rdb,
+		CurrData:   make([]database.BulkInsertUnitsParams, 0),
 		RiotApiKey: riotApiKey,
 		NumWorkers: 10,
 	}
 	//first run of crawler on each container will be same puuid
 	startingPuuid := os.Getenv("STARTING_PUUID")
-	initialVisited, err := matchCrawler.Queue.CheckPlayerVisited(startingPuuid)
-	if err != nil {
-		log.Print(err)
-		log.Fatal("error checking if initial player in visited")
-	}
-
-	if !initialVisited {
-		matchCrawler.AddPlayer(os.Getenv("STARTING_PUUID"))
-	}
-
+	matchCrawler.AddPlayerIfNotVisited(startingPuuid)
 	maxDepth := 3
 	currDepth := 0
 	//main loop
 	for {
-
 		if currDepth >= maxDepth {
 			log.Print("finished all layers without issues")
 			return
 		}
-		playersLen, err := matchCrawler.Queue.PlayersQueueLen()
+		playersLen, err := matchCrawler.Rdb.PlayersQueueLen()
 		if err != nil {
 			log.Print(err)
 			log.Fatal("error getting len of player queue")
 		}
 		for playersLen > 0 {
-			currPuuid, err := matchCrawler.Queue.DequeuePlayer()
-			if err != nil {
-				log.Print(err)
-				log.Fatal("error poping from player queue")
+			for i := 0; i < min(playersLen, matchCrawler.NumWorkers); i++ {
+				currPuuid, err := matchCrawler.Rdb.DequeuePlayer()
+				if err != nil {
+					log.Print(err)
+					log.Fatal("error poping from player queue")
+				}
+				matchCrawler.Wg.Add(1)
+				go matchCrawler.GetMatchesFromPuuid(currPuuid)
 			}
-			err = matchCrawler.GetMatches(currPuuid)
-			if err != nil {
-				log.Print(err)
-				log.Fatal("error getting matches for given playerID")
-			}
-			playersLen, err = matchCrawler.Queue.PlayersQueueLen()
+			matchCrawler.Wg.Wait()
+
+			playersLen, err = matchCrawler.Rdb.PlayersQueueLen()
 			if err != nil {
 				log.Print(err)
 				log.Fatal("error getting len of player queue")
 			}
 		}
-		matchesLen, err := matchCrawler.Queue.MatchesQueueLen()
+
+		matchesLen, err := matchCrawler.Rdb.MatchesQueueLen()
 		if err != nil {
 			log.Print(err)
 			log.Fatal("error getting len of match queue")
 		}
+
 		for matchesLen > 0 {
-			currMatchId, err := matchCrawler.Queue.DequeueMatch()
-			if err != nil {
-				log.Print(err)
-				log.Fatal("error poping from match queue")
+			for i := 0; i < min(matchesLen, matchCrawler.NumWorkers); i++ {
+				matchId, err := matchCrawler.Rdb.DequeueMatch()
+				if err != nil {
+					log.Print(err)
+					log.Fatal("error poping from matches queue")
+				}
+				matchCrawler.Wg.Add(1)
+				go matchCrawler.GetMatchDataFromMatchID(matchId)
 			}
-			err = matchCrawler.GetMatchData(currMatchId)
+			matchCrawler.Wg.Wait()
+
+			idk, err := Pgdb.Client.BulkInsertUnits(Pgdb.Context, matchCrawler.CurrData)
 			if err != nil {
-				log.Print(err)
-				log.Fatal("error getting match data for given matchId")
+				log.Fatal("error writing local data to database")
 			}
-			matchesLen, err = matchCrawler.Queue.MatchesQueueLen()
+			log.Printf("successfully inserted %d rows", idk)
+			matchCrawler.CurrData = nil
+
+			matchesLen, err = matchCrawler.Rdb.MatchesQueueLen()
 			if err != nil {
 				log.Print(err)
-				log.Fatal("error getting len of match queue")
+				log.Fatal("error getting len of matches queue")
 			}
 		}
+
 		currDepth += 1
 		log.Printf("finished %d layers without issues", currDepth)
 	}

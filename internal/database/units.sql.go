@@ -9,10 +9,16 @@ import (
 	"context"
 )
 
-const insertUnit = `-- name: InsertUnit :one
+type BulkInsertUnitsParams struct {
+	Unitname  string
+	Starlevel int16
+	Items     []string
+	Placement int16
+}
+
+const insertUnit = `-- name: InsertUnit :exec
 INSERT INTO units(unitName, starLevel, items, placement)
 VALUES ($1, $2, $3, $4)
-RETURNING id, unitname, starlevel, items, placement
 `
 
 type InsertUnitParams struct {
@@ -22,20 +28,12 @@ type InsertUnitParams struct {
 	Placement int16
 }
 
-func (q *Queries) InsertUnit(ctx context.Context, arg InsertUnitParams) (Unit, error) {
-	row := q.db.QueryRow(ctx, insertUnit,
+func (q *Queries) InsertUnit(ctx context.Context, arg InsertUnitParams) error {
+	_, err := q.db.Exec(ctx, insertUnit,
 		arg.Unitname,
 		arg.Starlevel,
 		arg.Items,
 		arg.Placement,
 	)
-	var i Unit
-	err := row.Scan(
-		&i.ID,
-		&i.Unitname,
-		&i.Starlevel,
-		&i.Items,
-		&i.Placement,
-	)
-	return i, err
+	return err
 }

@@ -2,176 +2,84 @@ package crawler
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
 	"log"
-	"net/http"
 	"sync"
-	"time"
 
 	"github.com/sidesbutgithub/tftStats/matchCrawler/internal/database"
+	"github.com/sidesbutgithub/tftStats/matchCrawler/internal/databaseClients"
 	"github.com/sidesbutgithub/tftStats/matchCrawler/internal/models"
+	"github.com/sidesbutgithub/tftStats/matchCrawler/internal/utils"
 )
 
 //store data locally before writing as bulk insert queries significantly faster
 
 type Crawler struct {
-	mu *sync.Mutex
-	wg *sync.WaitGroup
+	Mu *sync.Mutex
+	Wg *sync.WaitGroup
 
-	Queue      *database.RedisDB
-	DB         *database.PostgresDB
-	CurrData   []database.Unit
+	Rdb        *databaseClients.RedisDB
+	CurrData   []database.BulkInsertUnitsParams
 	RiotApiKey string
 	NumWorkers int
 }
 
-// adds the puuid to the queue and marks them as visited
-func (crawlerInst *Crawler) AddPlayer(puuid string) error {
-	err := crawlerInst.Queue.EnqueuePlayer(puuid)
-	if err != nil {
-		log.Print("Error enquing player")
-		return err
-	}
-	err = crawlerInst.Queue.MarkPlayerVisited(puuid)
-	if err != nil {
-		log.Print("Error marking player as visited")
-		return err
-	}
-	return nil
-}
+func (crawlerInst *Crawler) AddMatchIfNotVisited(matchId string) (bool, error) {
+	crawlerInst.Mu.Lock()
+	defer crawlerInst.Mu.Unlock()
 
-// adds the match to the queue and marks them as visited
-func (crawlerInst *Crawler) AddMatch(matchId string) error {
-	err := crawlerInst.Queue.EnqueueMatch(matchId)
+	visited, err := crawlerInst.Rdb.CheckMatchVisited(matchId)
+	if err != nil {
+		log.Print("Error checking if match was visited")
+		return false, err
+	}
+	if visited {
+		return false, nil
+	}
+	err = crawlerInst.Rdb.EnqueueMatch(matchId)
 	if err != nil {
 		log.Print("Error enquing match")
-		return err
+		return false, err
 	}
-	err = crawlerInst.Queue.MarkMatchVisited(matchId)
+	err = crawlerInst.Rdb.MarkMatchVisited(matchId)
 	if err != nil {
 		log.Print("Error marking match as visited")
-		return err
+		return false, err
 	}
-	return nil
+	return true, nil
 }
 
-/*
-func (crawlerInst *Crawler) InitializaPlayerQueue(initialQueueLen int) error {
-	crawlerInst.mu.Lock()
-	defer crawlerInst.mu.Unlock()
-	limitHits := 0
-	var res *http.Response
-	var err error
-	for {
-		res, err = http.Get(fmt.Sprintf("https://na1.api.riotgames.com/tft/league/v1/challenger?queue=RANKED_TFT&api_key=%s", crawlerInst.RiotApiKey))
-		if err != nil {
-			log.Print("Failed to get match response")
-			return err
-		}
-		if res.StatusCode == 200 {
-			break
-		}
-		if res.StatusCode != 429 {
-			log.Print(res.StatusCode)
-			return errors.New("unexpected http status code")
-		}
+func (crawlerInst *Crawler) AddPlayerIfNotVisited(puuid string) (bool, error) {
+	crawlerInst.Mu.Lock()
+	defer crawlerInst.Mu.Unlock()
 
-		limitHits += 1
-		if limitHits == 1 {
-			log.Print("hit lower rate limit 20 reqs/s, sleeping 1s before retrying")
-			time.Sleep(time.Second)
-		} else if limitHits < 4 { //possibly set max retries constant
-			log.Print("hit greater rate limit 100 reqs/2 mins, sleeping 2 mins before retrying")
-			time.Sleep(2 * time.Minute)
-		} else {
-			log.Print("hit rate limit max number of times, no more retying, quiting program")
-			return errors.New("rate limit exceeded excessively")
-		}
-	}
-
-	var bodyData models.LeagueResponse
-
-	defer res.Body.Close()
-	b, err := io.ReadAll(res.Body)
+	visited, err := crawlerInst.Rdb.CheckPlayerVisited(puuid)
 	if err != nil {
-		log.Print("Failed to read response body")
-		return err
+		log.Print("Error checking if player was visited")
+		return false, err
 	}
-
-	err = json.Unmarshal(b, &bodyData)
+	if visited {
+		return false, nil
+	}
+	err = crawlerInst.Rdb.EnqueuePlayer(puuid)
 	if err != nil {
-		log.Print("Failed to unmarshall body data")
-		return err
+		log.Print("Error enquing player")
+		return false, err
 	}
-
-	//TODO: need to check lower ranks if initialLen more than ppl in rank T-T, also go down ranks until all players initialized
-
-	for i := 0; i < initialQueueLen; i++ {
-		err = crawlerInst.AddPlayer(bodyData.Entries[i].Puuid)
-		if err != nil {
-			log.Print("Failed to unmarshall body data")
-			return err
-		}
+	err = crawlerInst.Rdb.MarkPlayerVisited(puuid)
+	if err != nil {
+		log.Print("Error marking player as visited")
+		return false, err
 	}
-	return nil
+	return true, nil
 }
-*/
+
 // adds the data of a given match to the database and adds all the participants of that match
-func (crawlerInst *Crawler) GetMatchData(matchID string) error {
-	/*
-		visited, err := crawlerInst.Queue.CheckMatchVisited(matchID)
-		if err != nil {
-			log.Print("Error checking if match in queue")
-			return err
-		}
-		if visited {
-			log.Printf("match %s already visited", matchID)
-			return nil
-		}
-		err = crawlerInst.Queue.MarkMatchVisited(matchID)
-		if err != nil {
-			log.Print("Error marking match as Visited")
-			return err
-		}
-	*/
-	limitHits := 0
-	var res *http.Response
-	var err error
-	for {
-		res, err = http.Get(fmt.Sprintf("https://americas.api.riotgames.com/tft/match/v1/matches/%s?api_key=%s", matchID, crawlerInst.RiotApiKey))
-		if err != nil {
-			log.Print("Failed to get match response")
-			return err
-		}
-		if res.StatusCode == 200 {
-			break
-		}
-		if res.StatusCode != 429 {
-			log.Print(res.StatusCode)
-			return errors.New("unexpected http status code")
-		}
+func (crawlerInst *Crawler) GetMatchDataFromMatchID(matchID string) error {
+	defer crawlerInst.Wg.Done()
+	reqAddress := fmt.Sprintf("https://americas.api.riotgames.com/tft/match/v1/matches/%s?api_key=%s", matchID, crawlerInst.RiotApiKey)
 
-		limitHits += 1
-		if limitHits == 1 {
-			log.Print("hit lower rate limit 20 reqs/s, sleeping 1s before retrying")
-			time.Sleep(time.Second)
-			log.Print("awake, retrying http request")
-		} else if limitHits < 4 { //possibly set max retries constant
-			log.Printf("https://americas.api.riotgames.com/tft/match/v1/matches/%s?api_key=%s", matchID, crawlerInst.RiotApiKey)
-			log.Print("hit greater rate limit 100 reqs/2 mins, sleeping 2 mins before retrying")
-			time.Sleep(2 * time.Minute)
-			log.Print("awake, retrying http request")
-		} else {
-			log.Print("hit rate limit max number of times, no more retying, quiting program")
-			return errors.New("rate limit exceeded excessively")
-		}
-
-	}
-
-	defer res.Body.Close()
-	b, err := io.ReadAll(res.Body)
+	b, err := utils.HandleHttpGetReqWithRetries(reqAddress, 5, 5)
 	if err != nil {
 		log.Print("Failed to read response body")
 		return err
@@ -186,111 +94,51 @@ func (crawlerInst *Crawler) GetMatchData(matchID string) error {
 	}
 
 	for _, participant := range bodyData.Info.Participants {
-		visited, err := crawlerInst.Queue.CheckPlayerVisited(participant.Puuid)
+		_, err := crawlerInst.AddPlayerIfNotVisited(participant.Puuid)
 		if err != nil {
-			log.Print("Error checking if player was visited")
+			log.Print("error adding player to queue and visited set")
 			return err
 		}
-		if !visited {
-			err = crawlerInst.AddPlayer(participant.Puuid)
-			if err != nil {
-				log.Print("Failed to add player to queue and visited")
-				return err
-			}
-		}
+		crawlerInst.Mu.Lock()
 		for _, unit := range participant.Units {
-			_, err := crawlerInst.DB.InsertUnit(unit.CharacterID, int16(unit.Tier), unit.ItemNames, int16(participant.Placement))
-			if err != nil {
-				fmt.Println("error adding unit to DB")
-				return err
-			}
+			//insert to slice within object to bulk write later
+			crawlerInst.CurrData = append(crawlerInst.CurrData, database.BulkInsertUnitsParams{
+				Unitname:  unit.CharacterID,
+				Starlevel: int16(unit.Tier),
+				Items:     unit.ItemNames,
+				Placement: int16(participant.Placement),
+			})
 		}
+		crawlerInst.Mu.Unlock()
 	}
 	return nil
 }
 
 // inserts the last 20 matches of the given puuid into the matches queue and marks them as visited if not already visited
-func (crawlerInst *Crawler) GetMatches(puuid string) error {
-	/*
-		visited, err := crawlerInst.Queue.CheckPlayerVisited(puuid)
-		if err != nil {
-			log.Print("Error checking if player has been visited")
-			return err
-		}
-		if visited {
-			log.Printf("player %s already visited", puuid)
-			return nil
-		}
-		err = crawlerInst.Queue.MarkPlayerVisited(puuid)
-		if err != nil {
-			log.Print("Error marking player as Visited")
-			return err
-		}
-	*/
-	limitHits := 0
-	var res *http.Response
-	var err error
-	for {
-		res, err = http.Get(fmt.Sprintf("https://americas.api.riotgames.com/tft/match/v1/matches/by-puuid/%s/ids?start=0&count=20&api_key=%s", puuid, crawlerInst.RiotApiKey))
-		if err != nil {
-			log.Print("Failed to get match response")
-			return err
-		}
-		if res.StatusCode == 200 {
-			break
-		}
-		if res.StatusCode != 429 {
-			log.Print(res.StatusCode)
-			return errors.New("unexpected http status code")
-		}
+func (crawlerInst *Crawler) GetMatchesFromPuuid(puuid string) {
+	defer crawlerInst.Wg.Done()
+	reqAddress := fmt.Sprintf("https://americas.api.riotgames.com/tft/match/v1/matches/by-puuid/%s/ids?start=0&count=20&api_key=%s", puuid, crawlerInst.RiotApiKey)
 
-		limitHits += 1
-		if limitHits == 1 {
-			log.Print("hit lower rate limit 20 reqs/s, sleeping 1s before retrying")
-			time.Sleep(time.Second)
-			log.Print("awake, retrying http request")
-		} else if limitHits < 4 { //possibly set max retries constant
-			log.Printf("https://americas.api.riotgames.com/tft/match/v1/matches/by-puuid/%s/ids?start=0&count=20&api_key=%s", puuid, crawlerInst.RiotApiKey)
-			log.Print("hit greater rate limit 100 reqs/2 mins, sleeping 2 mins before retrying")
-			time.Sleep(2 * time.Minute)
-			log.Print("awake, retrying http request")
-		} else {
-			log.Print("hit rate limit max number of times, no more retying, quiting program")
-			return errors.New("rate limit exceeded excessively")
-		}
-
-	}
-
-	defer res.Body.Close()
-	b, err := io.ReadAll(res.Body)
+	b, err := utils.HandleHttpGetReqWithRetries(reqAddress, 5, 5)
 	if err != nil {
-		log.Print("Failed to read response body")
-		return err
+		log.Print(err)
+		log.Fatal("Failed to read response body")
 	}
 
 	var bodyData []string
 
 	err = json.Unmarshal(b, &bodyData)
 	if err != nil {
-		log.Print("Failed to unmarshall body data")
 		log.Print(b)
 		log.Print(err)
-		return err
+		log.Fatal("Failed to unmarshall body data")
 	}
 
-	for _, matchID := range bodyData {
-		visited, err := crawlerInst.Queue.CheckMatchVisited(matchID)
+	for _, matchId := range bodyData {
+		_, err := crawlerInst.AddMatchIfNotVisited(matchId)
 		if err != nil {
-			log.Print("Error checking if match was visited")
-			return err
-		}
-		if !visited {
-			err = crawlerInst.AddMatch(matchID)
-			if err != nil {
-				log.Print("Failed to add match to queue and visited")
-				return err
-			}
+			log.Print(err)
+			log.Fatal("error adding player to queue and visited set")
 		}
 	}
-	return nil
 }

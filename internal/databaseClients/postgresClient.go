@@ -1,13 +1,14 @@
-package database
+package databaseClients
 
 import (
 	"context"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/sidesbutgithub/tftStats/matchCrawler/internal/database"
 )
 
 type PostgresDB struct {
-	Client            *Queries
+	Client            *database.Queries
 	Context           context.Context
 	initialConnection *pgx.Conn
 }
@@ -19,12 +20,12 @@ func (db *PostgresDB) ConnectPostgres(postgresURI string) error {
 		return err
 	}
 	db.initialConnection = conn
-	db.Client = New(conn)
+	db.Client = database.New(conn)
 	return nil
 }
 
-func (db *PostgresDB) InsertUnit(unitName string, starLevel int16, items []string, placement int16) (Unit, error) {
-	return db.Client.InsertUnit(db.Context, InsertUnitParams{
+func (db *PostgresDB) InsertUnit(unitName string, starLevel int16, items []string, placement int16) error {
+	return db.Client.InsertUnit(db.Context, database.InsertUnitParams{
 		Unitname:  unitName,
 		Starlevel: starLevel,
 		Items:     items,
