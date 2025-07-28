@@ -10,6 +10,7 @@ import (
 	"github.com/sidesbutgithub/tftStats/matchCrawler/internal/crawler"
 	"github.com/sidesbutgithub/tftStats/matchCrawler/internal/database"
 	"github.com/sidesbutgithub/tftStats/matchCrawler/internal/databaseClients"
+	"golang.org/x/time/rate"
 )
 
 func main() {
@@ -46,6 +47,8 @@ func main() {
 	matchCrawler := &crawler.Crawler{
 		Mu:         &sync.Mutex{},
 		Wg:         &sync.WaitGroup{},
+		Rl1:        rate.NewLimiter(20, 20),
+		Rl2:        rate.NewLimiter(rate.Limit(float64(100)/float64(120)), 1),
 		Rdb:        &Rdb,
 		CurrData:   make([]database.BulkInsertUnitsParams, 0),
 		RiotApiKey: riotApiKey,
@@ -70,10 +73,12 @@ func main() {
 		for playersLen > 0 {
 			for i := 0; i < min(playersLen, matchCrawler.NumWorkers); i++ {
 				currPuuid, err := matchCrawler.Rdb.DequeuePlayer()
+
 				if err != nil {
 					log.Print(err)
 					log.Fatal("error poping from player queue")
 				}
+				log.Printf("getting matches for player: %s", currPuuid)
 				matchCrawler.Wg.Add(1)
 				go matchCrawler.GetMatchesFromPuuid(currPuuid)
 			}
@@ -99,6 +104,7 @@ func main() {
 					log.Print(err)
 					log.Fatal("error poping from matches queue")
 				}
+				log.Printf("getting match data for match: %s", matchId)
 				matchCrawler.Wg.Add(1)
 				go matchCrawler.GetMatchDataFromMatchID(matchId)
 			}

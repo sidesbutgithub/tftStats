@@ -1,6 +1,7 @@
 package crawler
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -10,13 +11,16 @@ import (
 	"github.com/sidesbutgithub/tftStats/matchCrawler/internal/databaseClients"
 	"github.com/sidesbutgithub/tftStats/matchCrawler/internal/models"
 	"github.com/sidesbutgithub/tftStats/matchCrawler/internal/utils"
+	"golang.org/x/time/rate"
 )
 
 //store data locally before writing as bulk insert queries significantly faster
 
 type Crawler struct {
-	Mu *sync.Mutex
-	Wg *sync.WaitGroup
+	Mu  *sync.Mutex
+	Wg  *sync.WaitGroup
+	Rl1 *rate.Limiter
+	Rl2 *rate.Limiter
 
 	Rdb        *databaseClients.RedisDB
 	CurrData   []database.BulkInsertUnitsParams
@@ -75,14 +79,24 @@ func (crawlerInst *Crawler) AddPlayerIfNotVisited(puuid string) (bool, error) {
 }
 
 // adds the data of a given match to the database and adds all the participants of that match
-func (crawlerInst *Crawler) GetMatchDataFromMatchID(matchID string) error {
+func (crawlerInst *Crawler) GetMatchDataFromMatchID(matchID string) {
 	defer crawlerInst.Wg.Done()
 	reqAddress := fmt.Sprintf("https://americas.api.riotgames.com/tft/match/v1/matches/%s?api_key=%s", matchID, crawlerInst.RiotApiKey)
 
+	err := crawlerInst.Rl1.Wait(context.Background())
+	if err != nil {
+		log.Print("failed to wait for rate limit")
+		log.Fatal(err)
+	}
+	err = crawlerInst.Rl2.Wait(context.Background())
+	if err != nil {
+		log.Print("failed to wait for rate limit")
+		log.Fatal(err)
+	}
 	b, err := utils.HandleHttpGetReqWithRetries(reqAddress, 5, 5)
 	if err != nil {
 		log.Print("Failed to read response body")
-		return err
+		log.Fatal(err)
 	}
 
 	var bodyData models.MatchResponse
@@ -90,14 +104,14 @@ func (crawlerInst *Crawler) GetMatchDataFromMatchID(matchID string) error {
 	err = json.Unmarshal(b, &bodyData)
 	if err != nil {
 		log.Print("Failed to unmarshall body data")
-		return err
+		log.Fatal(err)
 	}
 
 	for _, participant := range bodyData.Info.Participants {
 		_, err := crawlerInst.AddPlayerIfNotVisited(participant.Puuid)
 		if err != nil {
 			log.Print("error adding player to queue and visited set")
-			return err
+			log.Fatal(err)
 		}
 		crawlerInst.Mu.Lock()
 		for _, unit := range participant.Units {
@@ -111,13 +125,25 @@ func (crawlerInst *Crawler) GetMatchDataFromMatchID(matchID string) error {
 		}
 		crawlerInst.Mu.Unlock()
 	}
-	return nil
+
 }
 
 // inserts the last 20 matches of the given puuid into the matches queue and marks them as visited if not already visited
 func (crawlerInst *Crawler) GetMatchesFromPuuid(puuid string) {
 	defer crawlerInst.Wg.Done()
 	reqAddress := fmt.Sprintf("https://americas.api.riotgames.com/tft/match/v1/matches/by-puuid/%s/ids?start=0&count=20&api_key=%s", puuid, crawlerInst.RiotApiKey)
+
+	err := crawlerInst.Rl1.Wait(context.Background())
+	if err != nil {
+		log.Print("failed to wait for rate limit")
+		log.Fatal(err)
+	}
+
+	err = crawlerInst.Rl2.Wait(context.Background())
+	if err != nil {
+		log.Print("failed to wait for rate limit")
+		log.Fatal(err)
+	}
 
 	b, err := utils.HandleHttpGetReqWithRetries(reqAddress, 5, 5)
 	if err != nil {
@@ -129,7 +155,6 @@ func (crawlerInst *Crawler) GetMatchesFromPuuid(puuid string) {
 
 	err = json.Unmarshal(b, &bodyData)
 	if err != nil {
-		log.Print(b)
 		log.Print(err)
 		log.Fatal("Failed to unmarshall body data")
 	}

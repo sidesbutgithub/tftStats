@@ -38,6 +38,7 @@ func HandleHttpGetReqWithRetries(reqAddress string, maxReqRetries int, maxBodyRe
 		}
 
 		if res.StatusCode == 429 {
+			log.Print("program rate limiting failed")
 			currRetries += 1
 			if currRetries == 1 {
 				log.Print("hit lower rate limit 20 reqs/s, sleeping 1s before retrying")
