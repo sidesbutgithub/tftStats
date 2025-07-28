@@ -58,6 +58,7 @@ func HandleHttpGetReqWithRetries(reqAddress string, maxReqRetries int, maxBodyRe
 		}
 		log.Print(reqAddress)
 		log.Print(res.StatusCode)
-		return nil, errors.New("unexpected http status code")
+		log.Print("unexpected http status code")
+		return nil, nil
 	}
 }

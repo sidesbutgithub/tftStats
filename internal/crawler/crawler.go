@@ -86,25 +86,32 @@ func (crawlerInst *Crawler) GetMatchDataFromMatchID(matchID string) {
 	err := crawlerInst.Rl1.Wait(context.Background())
 	if err != nil {
 		log.Print("failed to wait for rate limit")
-		log.Fatal(err)
+		log.Print(err)
 	}
 	err = crawlerInst.Rl2.Wait(context.Background())
 	if err != nil {
 		log.Print("failed to wait for rate limit")
-		log.Fatal(err)
+		log.Print(err)
 	}
 	b, err := utils.HandleHttpGetReqWithRetries(reqAddress, 5, 5)
 	if err != nil {
-		log.Print("Failed to read response body")
-		log.Fatal(err)
+		log.Print("Failed to get response body")
+		log.Print(err)
+		return
+	}
+	if b == nil {
+		log.Print("skipping queue item")
+		return
 	}
 
 	var bodyData models.MatchResponse
 
 	err = json.Unmarshal(b, &bodyData)
 	if err != nil {
-		log.Print("Failed to unmarshall body data")
-		log.Fatal(err)
+		log.Print("Failed to unmarshall body data, skipping")
+		log.Print(reqAddress)
+		log.Print(err)
+		return
 	}
 
 	for _, participant := range bodyData.Info.Participants {
@@ -136,27 +143,34 @@ func (crawlerInst *Crawler) GetMatchesFromPuuid(puuid string) {
 	err := crawlerInst.Rl1.Wait(context.Background())
 	if err != nil {
 		log.Print("failed to wait for rate limit")
-		log.Fatal(err)
+		log.Print(err)
 	}
 
 	err = crawlerInst.Rl2.Wait(context.Background())
 	if err != nil {
 		log.Print("failed to wait for rate limit")
-		log.Fatal(err)
+		log.Print(err)
 	}
 
 	b, err := utils.HandleHttpGetReqWithRetries(reqAddress, 5, 5)
 	if err != nil {
+		log.Print("Failed to get response body")
 		log.Print(err)
-		log.Fatal("Failed to read response body")
+		return
+	}
+	if b == nil {
+		log.Print("skipping queue item")
+		return
 	}
 
 	var bodyData []string
 
 	err = json.Unmarshal(b, &bodyData)
 	if err != nil {
+		log.Print("Failed to unmarshall body data, skipping")
+		log.Print(reqAddress)
 		log.Print(err)
-		log.Fatal("Failed to unmarshall body data")
+		return
 	}
 
 	for _, matchId := range bodyData {

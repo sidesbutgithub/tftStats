@@ -57,7 +57,8 @@ func (db *RedisDB) MarkMatchVisited(matchId string) error {
 	}
 	err := db.Client.SAdd(db.Context, "visitedMatches", matchId).Err()
 	if err != nil {
-		log.Fatal("Failed to write match to visited set")
+		log.Print("Failed to write match to visited set")
+		return err
 	}
 	return nil
 }

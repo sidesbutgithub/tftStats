@@ -70,6 +70,10 @@ func main() {
 			log.Print(err)
 			log.Fatal("error getting len of player queue")
 		}
+		if playersLen == 0 {
+			log.Fatal("all possible players from starting puuid reached")
+		}
+
 		for playersLen > 0 {
 			for i := 0; i < min(playersLen, matchCrawler.NumWorkers); i++ {
 				currPuuid, err := matchCrawler.Rdb.DequeuePlayer()
@@ -95,6 +99,10 @@ func main() {
 		if err != nil {
 			log.Print(err)
 			log.Fatal("error getting len of match queue")
+		}
+
+		if matchesLen == 0 {
+			log.Fatal("all possible matches from starting puuid reached")
 		}
 
 		for matchesLen > 0 {
