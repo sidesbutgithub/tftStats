@@ -1,0 +1,7 @@
+FROM gomicro/goose
+
+WORKDIR /migrations
+
+COPY . ./
+
+ENTRYPOINT ["migrations/entrypoint.sh"]

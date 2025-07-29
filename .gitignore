@@ -1,0 +1,4 @@
+.env
+sql
+*.exe
+__pycache__
