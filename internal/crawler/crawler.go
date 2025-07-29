@@ -17,15 +17,15 @@ import (
 //store data locally before writing as bulk insert queries significantly faster
 
 type Crawler struct {
-	Mu  *sync.Mutex
-	Wg  *sync.WaitGroup
-	Rl1 *rate.Limiter
-	Rl2 *rate.Limiter
+	Mu *sync.Mutex
+	Wg *sync.WaitGroup
+	Rl *rate.Limiter
 
-	Rdb        *databaseClients.RedisDB
-	CurrData   []database.BulkInsertUnitsParams
-	RiotApiKey string
-	NumWorkers int
+	Rdb           *databaseClients.RedisDB
+	CurrData      []database.BulkInsertUnitsParams
+	RiotApiKey    string
+	MatchWorkers  int
+	PlayerWorkers int
 }
 
 func (crawlerInst *Crawler) AddMatchIfNotVisited(matchId string) (bool, error) {
@@ -80,15 +80,9 @@ func (crawlerInst *Crawler) AddPlayerIfNotVisited(puuid string) (bool, error) {
 
 // adds the data of a given match to the database and adds all the participants of that match
 func (crawlerInst *Crawler) GetMatchDataFromMatchID(matchID string) {
-	defer crawlerInst.Wg.Done()
 	reqAddress := fmt.Sprintf("https://americas.api.riotgames.com/tft/match/v1/matches/%s?api_key=%s", matchID, crawlerInst.RiotApiKey)
 
-	err := crawlerInst.Rl1.Wait(context.Background())
-	if err != nil {
-		log.Print("failed to wait for rate limit")
-		log.Print(err)
-	}
-	err = crawlerInst.Rl2.Wait(context.Background())
+	err := crawlerInst.Rl.Wait(context.Background())
 	if err != nil {
 		log.Print("failed to wait for rate limit")
 		log.Print(err)
@@ -137,16 +131,9 @@ func (crawlerInst *Crawler) GetMatchDataFromMatchID(matchID string) {
 
 // inserts the last 20 matches of the given puuid into the matches queue and marks them as visited if not already visited
 func (crawlerInst *Crawler) GetMatchesFromPuuid(puuid string) {
-	defer crawlerInst.Wg.Done()
 	reqAddress := fmt.Sprintf("https://americas.api.riotgames.com/tft/match/v1/matches/by-puuid/%s/ids?start=0&count=20&api_key=%s", puuid, crawlerInst.RiotApiKey)
 
-	err := crawlerInst.Rl1.Wait(context.Background())
-	if err != nil {
-		log.Print("failed to wait for rate limit")
-		log.Print(err)
-	}
-
-	err = crawlerInst.Rl2.Wait(context.Background())
+	err := crawlerInst.Rl.Wait(context.Background())
 	if err != nil {
 		log.Print("failed to wait for rate limit")
 		log.Print(err)

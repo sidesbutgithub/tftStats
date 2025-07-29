@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -11,21 +12,28 @@ import (
 type RedisDB struct {
 	Client  *redis.Client
 	Context context.Context
+	Timeout time.Duration
 }
 
 //Connect to Redis Database
 
-func (db *RedisDB) ConnectRedis(redisHost string, redisPort string, redisPassword string, redisDBNum int) {
-	db.Client = redis.NewClient(&redis.Options{
-		Addr:     redisHost + ":" + redisPort,
-		Password: redisPassword, // No password set
-		DB:       redisDBNum,    // Use default DB
-	})
+func (db *RedisDB) ConnectRedis(connString string) {
+	opt, err := redis.ParseURL(connString)
+	if err != nil {
+		log.Print(err)
+		log.Fatal("error parsing connection string")
+	}
+
+	db.Client = redis.NewClient(opt)
 	db.Context = context.Background()
-	err := db.Client.Ping(db.Context).Err()
+	err = db.Client.Ping(db.Context).Err()
 	if err != nil {
 		log.Fatal("Failed to connect to Redis")
 	}
+}
+
+func (db *RedisDB) SetTimeout(blockingTimeout time.Duration) {
+	db.Timeout = blockingTimeout
 }
 
 //Set for visited Players
@@ -92,13 +100,16 @@ func (db *RedisDB) DequeuePlayer() (string, error) {
 		return "", err
 	}
 	if queueLen == 0 {
-		return "", errors.New("players queue is empty")
+		log.Print("players queue is empty, waiting for players to be added")
 	}
-	puuid, err := db.Client.RPop(db.Context, "playersQueue").Result()
+	puuid, err := db.Client.BRPop(db.Context, db.Timeout, "playersQueue").Result()
 	if err != nil {
 		return "", err
 	}
-	return puuid, err
+	if queueLen == 0 {
+		log.Print("players queue no longer empty, successfully popped value")
+	}
+	return puuid[1], err
 }
 
 // Queue for matches to visit
@@ -119,13 +130,16 @@ func (db *RedisDB) DequeueMatch() (string, error) {
 		return "", err
 	}
 	if queueLen == 0 {
-		return "", errors.New("matches queue is empty")
+		log.Print("matches queue is empty, waiting for matches to be added")
 	}
-	puuid, err := db.Client.RPop(db.Context, "matchesQueue").Result()
+	matchId, err := db.Client.BRPop(db.Context, db.Timeout, "matchesQueue").Result()
 	if err != nil {
 		return "", err
 	}
-	return puuid, err
+	if queueLen == 0 {
+		log.Print("players queue no longer empty, successfully popped value")
+	}
+	return matchId[1], err
 }
 
 func (db *RedisDB) PlayersQueueLen() (int, error) {

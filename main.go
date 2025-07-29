@@ -3,8 +3,8 @@ package main
 import (
 	"log"
 	"os"
-	"strconv"
 	"sync"
+	"time"
 
 	"github.com/joho/godotenv"
 	"github.com/sidesbutgithub/tftStats/matchCrawler/internal/crawler"
@@ -16,7 +16,7 @@ import (
 func main() {
 	err := godotenv.Load()
 	if err != nil {
-		log.Fatal("Failed to load .env file")
+		log.Print("Failed to load .env file")
 	}
 
 	//connect to postgres
@@ -30,110 +30,72 @@ func main() {
 
 	//connect to redis
 	var Rdb databaseClients.RedisDB
-	RdbHost, RdbPort, RdbPW := os.Getenv("REDIS_HOST"), os.Getenv("REDIS_PORT"), os.Getenv("REDIS_PASSWORD")
-	RdbDbNum, err := strconv.Atoi(os.Getenv("REDIS_DB_NUM"))
-	if err != nil {
-		log.Fatal("unable to parse rdb num")
-	}
+	RdbConnString := os.Getenv("REDIS_URI")
 
-	Rdb.ConnectRedis(RdbHost, RdbPort, RdbPW, RdbDbNum)
+	Rdb.ConnectRedis(RdbConnString)
 	if err != nil {
-		log.Print(RdbHost, RdbPort, RdbPW, RdbDbNum)
+		log.Print(RdbConnString)
 		log.Fatal("Failed to connect to Redis DB")
 	}
+
+	Rdb.SetTimeout(time.Minute)
 
 	riotApiKey := os.Getenv("RIOT_API_KEY")
 
 	matchCrawler := &crawler.Crawler{
 		Mu:         &sync.Mutex{},
 		Wg:         &sync.WaitGroup{},
-		Rl1:        rate.NewLimiter(20, 20),
-		Rl2:        rate.NewLimiter(rate.Limit(float64(100)/float64(120)), 1),
+		Rl:         rate.NewLimiter(rate.Limit(float64(100)/float64(120)), 1),
 		Rdb:        &Rdb,
 		CurrData:   make([]database.BulkInsertUnitsParams, 0),
 		RiotApiKey: riotApiKey,
-		NumWorkers: 10,
+
+		MatchWorkers:  2,
+		PlayerWorkers: 5,
 	}
 	//first run of crawler on each container will be same puuid
 	startingPuuid := os.Getenv("STARTING_PUUID")
 	matchCrawler.AddPlayerIfNotVisited(startingPuuid)
-	maxDepth := 3
-	currDepth := 0
+
 	//main loop
 	for {
-		if currDepth >= maxDepth {
-			log.Print("finished all layers without issues")
-			return
+		for i := 0; i < matchCrawler.PlayerWorkers; i++ {
+			matchCrawler.Wg.Add(1)
+			go matchCrawler.DequeuePlayerEnqueueMatches()
 		}
+		for i := 0; i < matchCrawler.MatchWorkers; i++ {
+			matchCrawler.Wg.Add(1)
+			go matchCrawler.DequeueMatchEnqueuePlayers()
+		}
+		matchCrawler.Wg.Wait()
+		rowsInserted, err := Pgdb.Client.BulkInsertUnits(Pgdb.Context, matchCrawler.CurrData)
+		if err != nil {
+			log.Fatal("error writing local data to database")
+		}
+		log.Printf("successfully inserted %d rows", rowsInserted)
+		matchCrawler.CurrData = nil
+
 		playersLen, err := matchCrawler.Rdb.PlayersQueueLen()
 		if err != nil {
+			log.Print("err getting players queue Length")
 			log.Print(err)
-			log.Fatal("error getting len of player queue")
 		}
-		if playersLen == 0 {
-			log.Fatal("all possible players from starting puuid reached")
-		}
-
-		for playersLen > 0 {
-			for i := 0; i < min(playersLen, matchCrawler.NumWorkers); i++ {
-				currPuuid, err := matchCrawler.Rdb.DequeuePlayer()
-
-				if err != nil {
-					log.Print(err)
-					log.Fatal("error poping from player queue")
-				}
-				log.Printf("getting matches for player: %s", currPuuid)
-				matchCrawler.Wg.Add(1)
-				go matchCrawler.GetMatchesFromPuuid(currPuuid)
-			}
-			matchCrawler.Wg.Wait()
-
-			playersLen, err = matchCrawler.Rdb.PlayersQueueLen()
-			if err != nil {
-				log.Print(err)
-				log.Fatal("error getting len of player queue")
-			}
-		}
-
+		log.Printf("Players left in queue: %d", playersLen)
 		matchesLen, err := matchCrawler.Rdb.MatchesQueueLen()
 		if err != nil {
+			log.Print("err getting Matches queue Length")
 			log.Print(err)
-			log.Fatal("error getting len of match queue")
+		}
+		log.Printf("Matches left in queue: %d", matchesLen)
+
+		numMatchesCrawled, err := matchCrawler.Rdb.Client.SCard(Rdb.Context, "visitedMatches").Result()
+		if err != nil {
+			log.Print("err getting number of visited Matches")
+			log.Print(err)
 		}
 
-		if matchesLen == 0 {
-			log.Fatal("all possible matches from starting puuid reached")
-		}
+		log.Printf("Number of matches crawled: %d", int(numMatchesCrawled)-matchesLen)
 
-		for matchesLen > 0 {
-			for i := 0; i < min(matchesLen, matchCrawler.NumWorkers); i++ {
-				matchId, err := matchCrawler.Rdb.DequeueMatch()
-				if err != nil {
-					log.Print(err)
-					log.Fatal("error poping from matches queue")
-				}
-				log.Printf("getting match data for match: %s", matchId)
-				matchCrawler.Wg.Add(1)
-				go matchCrawler.GetMatchDataFromMatchID(matchId)
-			}
-			matchCrawler.Wg.Wait()
-
-			idk, err := Pgdb.Client.BulkInsertUnits(Pgdb.Context, matchCrawler.CurrData)
-			if err != nil {
-				log.Fatal("error writing local data to database")
-			}
-			log.Printf("successfully inserted %d rows", idk)
-			matchCrawler.CurrData = nil
-
-			matchesLen, err = matchCrawler.Rdb.MatchesQueueLen()
-			if err != nil {
-				log.Print(err)
-				log.Fatal("error getting len of matches queue")
-			}
-		}
-
-		currDepth += 1
-		log.Printf("finished %d layers without issues", currDepth)
 	}
 
 }
