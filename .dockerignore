@@ -1,6 +1,0 @@
-.env
-sqlc.yaml
-sql
-.gitignore
-.git
-*.exe
