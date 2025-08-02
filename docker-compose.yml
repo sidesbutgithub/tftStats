@@ -1,11 +1,23 @@
 version: '3'
 services:
+  initializeplayers:
+    build:
+      context: ./initializePlayers
+      dockerfile: ./Dockerfile
+    env_file:
+      - .env
+    volumes:
+      - .:/initializePlayers
+    depends_on:
+      - queue
+
+
   matchcrawler:
     build:
       context: ./matchCrawler
       dockerfile: ./Dockerfile
     env_file:
-      - matchCrawler/.env
+      - .env
     volumes:
       - .:/matchcrawler
     depends_on:
@@ -48,7 +60,7 @@ services:
       - POSTGRES_DB=postgres
       - POSTGRES_PASSWORD=password
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
       interval: 10s
       timeout: 5s
       retries: 5

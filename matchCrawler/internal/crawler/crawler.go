@@ -21,11 +21,12 @@ type Crawler struct {
 	Wg *sync.WaitGroup
 	Rl *rate.Limiter
 
-	Rdb           *databaseClients.RedisDB
-	CurrData      []database.BulkInsertUnitsParams
-	RiotApiKey    string
-	MatchWorkers  int
-	PlayerWorkers int
+	Rdb              *databaseClients.RedisDB
+	CurrData         []database.BulkInsertUnitsParams
+	RiotApiKey       string
+	MatchesStartTime string
+	MatchWorkers     int
+	PlayerWorkers    int
 }
 
 func (crawlerInst *Crawler) AddMatchIfNotVisited(matchId string) (bool, error) {
@@ -131,7 +132,7 @@ func (crawlerInst *Crawler) GetMatchDataFromMatchID(matchID string) {
 
 // inserts the last 20 matches of the given puuid into the matches queue and marks them as visited if not already visited
 func (crawlerInst *Crawler) GetMatchesFromPuuid(puuid string) {
-	reqAddress := fmt.Sprintf("https://americas.api.riotgames.com/tft/match/v1/matches/by-puuid/%s/ids?start=0&count=20&api_key=%s", puuid, crawlerInst.RiotApiKey)
+	reqAddress := fmt.Sprintf("https://americas.api.riotgames.com/tft/match/v1/matches/by-puuid/%s/ids?start=0&start=0&startTime=%s&count=20&api_key=%s", puuid, crawlerInst.MatchesStartTime, crawlerInst.RiotApiKey)
 
 	err := crawlerInst.Rl.Wait(context.Background())
 	if err != nil {

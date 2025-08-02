@@ -43,19 +43,20 @@ func main() {
 	riotApiKey := os.Getenv("RIOT_API_KEY")
 
 	matchCrawler := &crawler.Crawler{
-		Mu:         &sync.Mutex{},
-		Wg:         &sync.WaitGroup{},
-		Rl:         rate.NewLimiter(rate.Limit(float64(100)/float64(120)), 1),
-		Rdb:        &Rdb,
-		CurrData:   make([]database.BulkInsertUnitsParams, 0),
-		RiotApiKey: riotApiKey,
+		Mu:               &sync.Mutex{},
+		Wg:               &sync.WaitGroup{},
+		Rl:               rate.NewLimiter(rate.Limit(float64(100)/float64(120)), 1),
+		Rdb:              &Rdb,
+		CurrData:         make([]database.BulkInsertUnitsParams, 0),
+		MatchesStartTime: os.Getenv("START_TIME"),
+		RiotApiKey:       riotApiKey,
 
-		MatchWorkers:  2,
-		PlayerWorkers: 5,
+		MatchWorkers:  5,
+		PlayerWorkers: 2,
 	}
 	//first run of crawler on each container will be same puuid
-	startingPuuid := os.Getenv("STARTING_PUUID")
-	matchCrawler.AddPlayerIfNotVisited(startingPuuid)
+	//startingPuuid := os.Getenv("STARTING_PUUID")
+	//matchCrawler.AddPlayerIfNotVisited(startingPuuid)
 
 	//main loop
 	for {
