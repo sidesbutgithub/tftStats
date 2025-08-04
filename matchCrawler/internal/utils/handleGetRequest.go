@@ -9,7 +9,7 @@ import (
 )
 
 // Returns the byte string
-func HandleHttpGetReqWithRetries(reqAddress string, maxReqRetries int, maxBodyRetries int) ([]byte, error) {
+func HandleHttpGetReqWithRetries(reqAddress string, numRetries int) ([]byte, error) {
 	var res *http.Response
 	var err error
 	currRetries := 1
@@ -26,7 +26,7 @@ func HandleHttpGetReqWithRetries(reqAddress string, maxReqRetries int, maxBodyRe
 			bodyRetries := 0
 			for err != nil {
 				bodyRetries += 1
-				if bodyRetries > maxBodyRetries {
+				if bodyRetries > numRetries {
 					log.Print(reqAddress)
 					log.Printf("body read failed excessively")
 					return nil, errors.New("max body read retries exceeded")
@@ -37,7 +37,7 @@ func HandleHttpGetReqWithRetries(reqAddress string, maxReqRetries int, maxBodyRe
 			return b, nil
 		}
 		if res.StatusCode == 429 {
-			if currRetries < maxReqRetries {
+			if currRetries < numRetries {
 				log.Printf("number of consecutive retries: %d", currRetries)
 				log.Printf("missmatch of program rate limit and riot rate limit, sleeping %ds before retrying", currRetries)
 				time.Sleep(time.Second * time.Duration(currRetries))

@@ -11,10 +11,10 @@ router = APIRouter(
 async def getAllUnits(req: Request, items: Annotated[list[str], Query()] = []):
     db = req.app.state.cursor
     db.execute('''
-               SELECT AVG(placement) AS AVP, unitname, starlevel
+               SELECT AVG(placement) AS avp, unitname, starlevel, COUNT(units)
                FROM units
                WHERE items @> %s::varchar[]
                GROUP BY unitname, starlevel
-               ORDER BY AVG(placement)
-               ''', items)
+               ORDER BY avp
+               ''', (items,))
     return db.fetchall()

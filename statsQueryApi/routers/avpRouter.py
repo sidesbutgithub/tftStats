@@ -33,7 +33,7 @@ async def getAvp(request: Request, unitName: str = "", starLevel: int = 0, items
     db.execute('''
                SELECT AVG(placement)
                FROM units
-               WHERE items @> %s::varchar[])
+               WHERE items @> %s::varchar[]
                ''', (items,))
     return {"AVP":db.fetchone()}
 

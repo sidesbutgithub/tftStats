@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 
@@ -42,6 +43,24 @@ func main() {
 
 	riotApiKey := os.Getenv("RIOT_API_KEY")
 
+	mWorkers, err := strconv.Atoi(os.Getenv("MATCH_WORKERS"))
+	if err != nil {
+		log.Print("Error Parsing Number of Match Workers from env, defaulting to 5")
+		mWorkers = 5
+	}
+
+	pWorkers, err := strconv.Atoi(os.Getenv("PLAYER_WORKERS"))
+	if err != nil {
+		log.Print("Error Parsing Number of Player Workers, defaulting to 2")
+		pWorkers = 5
+	}
+
+	numRetries, err := strconv.Atoi(os.Getenv("MAX_RETRIES"))
+	if err != nil {
+		log.Print("Error Parsing Number of Retries allowed, defaulting to 5")
+		numRetries = 5
+	}
+
 	matchCrawler := &crawler.Crawler{
 		Mu:               &sync.Mutex{},
 		Wg:               &sync.WaitGroup{},
@@ -51,8 +70,9 @@ func main() {
 		MatchesStartTime: os.Getenv("START_TIME"),
 		RiotApiKey:       riotApiKey,
 
-		MatchWorkers:  5,
-		PlayerWorkers: 2,
+		MatchWorkers:  mWorkers,
+		PlayerWorkers: pWorkers,
+		MaxRetries:    numRetries,
 	}
 	//first run of crawler on each container will be same puuid
 	//startingPuuid := os.Getenv("STARTING_PUUID")

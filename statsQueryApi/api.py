@@ -3,7 +3,7 @@ from fastapi import Depends
 from psycopg2.extras import RealDictCursor
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
-from routers import avpRouter, unitRouter, itemRouter
+from routers import avpRouter, unitRouter, itemRouter, buildsRouter
 import utils.globals as globals
 
 load_dotenv()
@@ -31,6 +31,8 @@ app.include_router(avpRouter.router)
 app.include_router(unitRouter.router)
 
 app.include_router(itemRouter.router)
+
+app.include_router(buildsRouter.router)
 
 @app.get("/")
 async def pingApi():

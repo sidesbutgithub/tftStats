@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"slices"
 	"sync"
 
 	"github.com/sidesbutgithub/tftStats/matchCrawler/internal/database"
@@ -27,6 +28,7 @@ type Crawler struct {
 	MatchesStartTime string
 	MatchWorkers     int
 	PlayerWorkers    int
+	MaxRetries       int
 }
 
 func (crawlerInst *Crawler) AddMatchIfNotVisited(matchId string) (bool, error) {
@@ -88,7 +90,7 @@ func (crawlerInst *Crawler) GetMatchDataFromMatchID(matchID string) {
 		log.Print("failed to wait for rate limit")
 		log.Print(err)
 	}
-	b, err := utils.HandleHttpGetReqWithRetries(reqAddress, 5, 5)
+	b, err := utils.HandleHttpGetReqWithRetries(reqAddress, crawlerInst.MaxRetries)
 	if err != nil {
 		log.Print("Failed to get response body")
 		log.Print(err)
@@ -118,6 +120,7 @@ func (crawlerInst *Crawler) GetMatchDataFromMatchID(matchID string) {
 		crawlerInst.Mu.Lock()
 		for _, unit := range participant.Units {
 			//insert to slice within object to bulk write later
+			slices.Sort(unit.ItemNames)
 			crawlerInst.CurrData = append(crawlerInst.CurrData, database.BulkInsertUnitsParams{
 				Unitname:  unit.CharacterID,
 				Starlevel: int16(unit.Tier),
@@ -140,7 +143,7 @@ func (crawlerInst *Crawler) GetMatchesFromPuuid(puuid string) {
 		log.Print(err)
 	}
 
-	b, err := utils.HandleHttpGetReqWithRetries(reqAddress, 5, 5)
+	b, err := utils.HandleHttpGetReqWithRetries(reqAddress, crawlerInst.MaxRetries)
 	if err != nil {
 		log.Print("Failed to get response body")
 		log.Print(err)

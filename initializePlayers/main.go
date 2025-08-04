@@ -16,10 +16,13 @@ import (
 )
 
 func main() {
+
+	rated := []string{"challenger", "grandmaster", "master"}
 	ranks := []string{"DIAMOND", "EMERALD", "PLATINUM", "GOLD", "SILVER", "BRONZE", "IRON"}
 	divisions := []string{"I", "II", "III", "IV"}
 	apiKey := os.Getenv("RIOT_API_KEY")
 	maxRetries, err := strconv.Atoi(os.Getenv("REQUEST_RETRIES"))
+
 	if err != nil {
 		log.Print(err)
 		log.Print("Error parsing max retries var from environment, setting default of 3 retries")
@@ -37,6 +40,79 @@ func main() {
 	err = redisClient.Ping(context.Background()).Err()
 	if err != nil {
 		log.Fatal("Failed to connect to Redis")
+	}
+
+	initialQueueLen, err := redisClient.LLen(context.Background(), "playersQueue").Result()
+	currRetries := 0
+	for err != nil {
+		currRetries += 1
+		if currRetries > maxRetries {
+			log.Print(err)
+			log.Printf("Error getting queue len exceeding max retries %d", currRetries)
+			continue
+		}
+		log.Print(err)
+		log.Print("Error getting queue len, retrying...")
+	}
+	if initialQueueLen != 0 {
+		log.Printf("Queue already contains %d entries, exiting initialization service", initialQueueLen)
+		return
+	}
+
+	for _, ladder := range rated {
+		res, err := http.Get(fmt.Sprintf("https://na1.api.riotgames.com/tft/league/v1/%s?queue=RANKED_TFT&api_key=%s", ladder, apiKey))
+		currRetries := 0
+		for err != nil {
+			currRetries += 1
+			if currRetries > maxRetries {
+				log.Print(err)
+				log.Printf("Error getting data for %s exceeding max retries %d, skipping...", ladder, maxRetries)
+				continue
+			}
+			log.Print(err)
+			log.Printf("Error getting data for %s , retrying...", ladder)
+		}
+		currRetries = 0
+		b, err := io.ReadAll(res.Body)
+		for err != nil {
+			currRetries += 1
+			if currRetries > maxRetries {
+				log.Print(err)
+				log.Printf("Error reading body data for %s exceeding max retries %d, skipping...", ladder, maxRetries)
+				continue
+			}
+			log.Print(err)
+			log.Printf("Error getting body data for %s, retrying...", ladder)
+		}
+		defer res.Body.Close()
+
+		var rankData models.RatedPlayersResponse
+		err = json.Unmarshal(b, &rankData)
+		for err != nil {
+			currRetries += 1
+			if currRetries > maxRetries {
+				log.Print(err)
+				log.Printf("Error unmarshalling body data for %s exceeding max retries %d, skipping...", ladder, maxRetries)
+				continue
+			}
+			log.Print(err)
+			log.Printf("Error unmarshalling body data for %s, retrying...", ladder)
+		}
+
+		if len(rankData.Entries) == 0 {
+			log.Printf("no matches in %s, getting players for next rank", ladder)
+			continue
+		}
+
+		initialPlayers := make([]string, 0)
+
+		for _, data := range rankData.Entries {
+			initialPlayers = append(initialPlayers, data.Puuid)
+		}
+
+		redisClient.RPush(context.Background(), "playersQueue", initialPlayers)
+		log.Printf("initialized player queue with %d players from rank %s, initization service complete", len(initialPlayers), ladder)
+		return
 	}
 
 	for _, rank := range ranks {
