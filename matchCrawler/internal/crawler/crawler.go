@@ -120,7 +120,9 @@ func (crawlerInst *Crawler) GetMatchDataFromMatchID(matchID string) {
 		crawlerInst.Mu.Lock()
 		for _, unit := range participant.Units {
 			//insert to slice within object to bulk write later
-			slices.Sort(unit.ItemNames)
+			if slices.Contains(unit.ItemNames, "TFT_Item_ThiefsGloves") {
+				unit.ItemNames = []string{"TFT_Item_ThiefsGloves"}
+			}
 			crawlerInst.CurrData = append(crawlerInst.CurrData, database.BulkInsertUnitsParams{
 				Unitname:  unit.CharacterID,
 				Starlevel: int16(unit.Tier),
