@@ -40,19 +40,18 @@ func HandleHttpGetReqWithRetries(reqAddress string, numRetries int) ([]byte, err
 			if currRetries < numRetries {
 				log.Printf("number of consecutive retries: %d", currRetries)
 				log.Printf("missmatch of program rate limit and riot rate limit, sleeping %ds before retrying", currRetries)
-				time.Sleep(time.Second * time.Duration(currRetries))
+				time.Sleep(time.Second * time.Duration(currRetries*currRetries))
 				log.Print("awake, retrying http request")
-				currRetries *= 2
+				currRetries += 1
 				continue
 			} else {
 				log.Print(reqAddress)
-				log.Print("hit rate limit max number of times, no more retying, quiting program")
+				log.Print("hit rate limit max number of times, no more retying, skipping item")
 				return nil, errors.New("rate limit exceeded excessively")
 			}
 		}
 		//dont actually log address in prod cuz it contains api key
-		log.Print(reqAddress)
-		log.Print(res.StatusCode)
+		log.Print(res.Status)
 		log.Print("unexpected http status code, skipping current address")
 		return nil, nil
 	}

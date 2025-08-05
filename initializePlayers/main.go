@@ -8,7 +8,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strconv"
 
 	"github.com/redis/go-redis/v9"
 
@@ -21,13 +20,6 @@ func main() {
 	ranks := []string{"DIAMOND", "EMERALD", "PLATINUM", "GOLD", "SILVER", "BRONZE", "IRON"}
 	divisions := []string{"I", "II", "III", "IV"}
 	apiKey := os.Getenv("RIOT_API_KEY")
-	maxRetries, err := strconv.Atoi(os.Getenv("REQUEST_RETRIES"))
-
-	if err != nil {
-		log.Print(err)
-		log.Print("Error parsing max retries var from environment, setting default of 3 retries")
-		maxRetries = 3
-	}
 
 	opt, err := redis.ParseURL(os.Getenv("REDIS_URI"))
 	if err != nil {
@@ -43,17 +35,11 @@ func main() {
 	}
 
 	initialQueueLen, err := redisClient.LLen(context.Background(), "playersQueue").Result()
-	currRetries := 0
-	for err != nil {
-		currRetries += 1
-		if currRetries > maxRetries {
-			log.Print(err)
-			log.Printf("Error getting queue len exceeding max retries %d", currRetries)
-			continue
-		}
+	if err != nil {
 		log.Print(err)
-		log.Print("Error getting queue len, retrying...")
+		log.Fatal("Error getting queue len")
 	}
+
 	if initialQueueLen != 0 {
 		log.Printf("Queue already contains %d entries, exiting initialization service", initialQueueLen)
 		return
@@ -61,46 +47,30 @@ func main() {
 
 	for _, ladder := range rated {
 		res, err := http.Get(fmt.Sprintf("https://na1.api.riotgames.com/tft/league/v1/%s?queue=RANKED_TFT&api_key=%s", ladder, apiKey))
-		currRetries := 0
-		for err != nil {
-			currRetries += 1
-			if currRetries > maxRetries {
-				log.Print(err)
-				log.Printf("Error getting data for %s exceeding max retries %d, skipping...", ladder, maxRetries)
-				continue
-			}
+		if err != nil {
 			log.Print(err)
-			log.Printf("Error getting data for %s , retrying...", ladder)
+			log.Printf("Error with http request for %s, skipping", ladder)
+			continue
 		}
-		currRetries = 0
 		b, err := io.ReadAll(res.Body)
-		for err != nil {
-			currRetries += 1
-			if currRetries > maxRetries {
-				log.Print(err)
-				log.Printf("Error reading body data for %s exceeding max retries %d, skipping...", ladder, maxRetries)
-				continue
-			}
+		if err != nil {
 			log.Print(err)
-			log.Printf("Error getting body data for %s, retrying...", ladder)
+			log.Printf("Error getting body data for %s, skipping", ladder)
+			continue
 		}
+
 		defer res.Body.Close()
 
 		var rankData models.RatedPlayersResponse
 		err = json.Unmarshal(b, &rankData)
-		for err != nil {
-			currRetries += 1
-			if currRetries > maxRetries {
-				log.Print(err)
-				log.Printf("Error unmarshalling body data for %s exceeding max retries %d, skipping...", ladder, maxRetries)
-				continue
-			}
+		if err != nil {
 			log.Print(err)
-			log.Printf("Error unmarshalling body data for %s, retrying...", ladder)
+			log.Printf("Error unmarshalling body data for %s, skipping", ladder)
+			continue
 		}
 
 		if len(rankData.Entries) == 0 {
-			log.Printf("no matches in %s, getting players for next rank", ladder)
+			log.Printf("No matches in %s, getting players for next rank", ladder)
 			continue
 		}
 
@@ -118,46 +88,30 @@ func main() {
 	for _, rank := range ranks {
 		for _, division := range divisions {
 			res, err := http.Get(fmt.Sprintf("https://na1.api.riotgames.com/tft/league/v1/entries/%s/%s?queue=RANKED_TFT&page=1&api_key=%s", rank, division, apiKey))
-			currRetries := 0
-			for err != nil {
-				currRetries += 1
-				if currRetries > maxRetries {
-					log.Print(err)
-					log.Printf("Error getting data for %s %s exceeding max retries %d, skipping...", rank, division, maxRetries)
-					continue
-				}
+			if err != nil {
 				log.Print(err)
-				log.Printf("Error getting data for %s %s, retrying...", rank, division)
+				log.Printf("Error with http request for %s %s, skipping", rank, division)
+				continue
 			}
-			currRetries = 0
+
 			b, err := io.ReadAll(res.Body)
-			for err != nil {
-				currRetries += 1
-				if currRetries > maxRetries {
-					log.Print(err)
-					log.Printf("Error reading body data for %s %s exceeding max retries %d, skipping...", rank, division, maxRetries)
-					continue
-				}
+			if err != nil {
 				log.Print(err)
-				log.Printf("Error getting body data for %s %s, retrying...", rank, division)
+				log.Printf("Error getting body data for %s %s, skipping", rank, division)
+				continue
 			}
 			defer res.Body.Close()
 
 			var rankData models.RankedPlayersResponse
 			err = json.Unmarshal(b, &rankData)
-			for err != nil {
-				currRetries += 1
-				if currRetries > maxRetries {
-					log.Print(err)
-					log.Printf("Error unmarshalling body data for %s %s exceeding max retries %d, skipping...", rank, division, maxRetries)
-					continue
-				}
+			if err != nil {
 				log.Print(err)
-				log.Printf("Error unmarshalling body data for %s %s, retrying...", rank, division)
+				log.Printf("Error unmarshalling body data for %s %s, skipping", rank, division)
+				continue
 			}
 
 			if len(rankData) == 0 {
-				log.Printf("no matches in %s %s, getting players for next rank", rank, division)
+				log.Printf("No matches in %s %s, getting players for next rank", rank, division)
 				continue
 			}
 
@@ -168,7 +122,7 @@ func main() {
 			}
 
 			redisClient.RPush(context.Background(), "playersQueue", initialPlayers)
-			log.Printf("initialized player queue with %d players from rank %s %s, initization service complete", len(initialPlayers), rank, division)
+			log.Printf("Initialized player queue with %d players from rank %s %s, initization service complete", len(initialPlayers), rank, division)
 			return
 		}
 	}

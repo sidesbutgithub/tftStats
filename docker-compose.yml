@@ -7,7 +7,7 @@ services:
     env_file:
       - .env
     volumes:
-      - .:/initializePlayers
+      - ./initializePlayers:/initializePlayers
     depends_on:
       - queue
 
@@ -19,7 +19,7 @@ services:
     env_file:
       - .env
     volumes:
-      - .:/matchcrawler
+      - ./matchCrawler:/matchcrawler
     depends_on:
       - migrations
       - queue
@@ -33,7 +33,7 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - .:/queryapi
+      - ./statsQueryApi:/queryapi
     depends_on:
       - migrations
     
@@ -43,7 +43,7 @@ services:
       context: ./migrations
       dockerfile: ./Dockerfile
     volumes:
-      - .:/migrations
+      - ./migrations:/migrations
     depends_on:
       db:
         condition: service_healthy
