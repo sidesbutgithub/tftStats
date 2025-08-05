@@ -123,6 +123,7 @@ func (crawlerInst *Crawler) GetMatchDataFromMatchID(matchID string) {
 			if slices.Contains(unit.ItemNames, "TFT_Item_ThiefsGloves") {
 				unit.ItemNames = []string{"TFT_Item_ThiefsGloves"}
 			}
+			slices.Sort(unit.ItemNames)
 			crawlerInst.CurrData = append(crawlerInst.CurrData, database.BulkInsertUnitsParams{
 				Unitname:  unit.CharacterID,
 				Starlevel: int16(unit.Tier),

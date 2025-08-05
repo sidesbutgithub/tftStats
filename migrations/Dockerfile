@@ -4,4 +4,4 @@ WORKDIR /migrations
 
 COPY . ./
 
-ENTRYPOINT ["migrations/entrypoint.sh"]
+ENTRYPOINT ["./entrypoint.sh"]

@@ -137,7 +137,7 @@ func (db *RedisDB) DequeueMatch() (string, error) {
 		return "", err
 	}
 	if queueLen == 0 {
-		log.Print("players queue no longer empty, successfully popped value")
+		log.Print("matches queue no longer empty, successfully popped value")
 	}
 	return matchId[1], err
 }

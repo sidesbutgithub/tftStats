@@ -52,7 +52,7 @@ func main() {
 	pWorkers, err := strconv.Atoi(os.Getenv("PLAYER_WORKERS"))
 	if err != nil {
 		log.Print("Error Parsing Number of Player Workers, defaulting to 2")
-		pWorkers = 5
+		pWorkers = 2
 	}
 
 	numRetries, err := strconv.Atoi(os.Getenv("MAX_RETRIES"))
