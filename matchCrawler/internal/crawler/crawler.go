@@ -122,6 +122,8 @@ func (crawlerInst *Crawler) GetMatchDataFromMatchID(matchID string) {
 			//insert to slice within object to bulk write later
 			if slices.Contains(unit.ItemNames, "TFT_Item_ThiefsGloves") {
 				unit.ItemNames = []string{"TFT_Item_ThiefsGloves"}
+			} else if slices.Contains(unit.ItemNames, "TFT5_Item_ThiefsGlovesRadiant") {
+				unit.ItemNames = []string{"TFT5_Item_ThiefsGlovesRadiant"}
 			}
 			slices.Sort(unit.ItemNames)
 			crawlerInst.CurrData = append(crawlerInst.CurrData, database.BulkInsertUnitsParams{
