@@ -11,6 +11,16 @@ services:
     depends_on:
       - queue
 
+  ratelimiting:
+    build:
+      context: ./riotRateLimiting
+      dockerfile: ./Dockerfile
+    env_file:
+      - .env
+    volumes:
+      - ./riotRateLimiting:/riotRateLimiting
+    depends_on:
+      - queue
 
   matchcrawler:
     build:
@@ -23,6 +33,7 @@ services:
     depends_on:
       - migrations
       - queue
+      - ratelimiting
   
   queryapi:
     build:

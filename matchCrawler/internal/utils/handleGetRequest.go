@@ -12,7 +12,7 @@ import (
 func HandleHttpGetReqWithRetries(reqAddress string, numRetries int) ([]byte, error) {
 	var res *http.Response
 	var err error
-	currRetries := 1
+	currRetries := 0
 	for {
 		res, err = http.Get(reqAddress)
 		if err != nil {
@@ -39,8 +39,9 @@ func HandleHttpGetReqWithRetries(reqAddress string, numRetries int) ([]byte, err
 		if res.StatusCode == 429 {
 			if currRetries < numRetries {
 				log.Printf("number of consecutive retries: %d", currRetries)
-				log.Printf("missmatch of program rate limit and riot rate limit, sleeping %ds before retrying", currRetries)
-				time.Sleep(time.Second * time.Duration(currRetries*currRetries))
+				sleepTime := (1 << currRetries)
+				log.Printf("missmatch of program rate limit and riot rate limit, sleeping %ds before retrying", sleepTime)
+				time.Sleep((time.Duration(sleepTime) * time.Second))
 				log.Print("awake, retrying http request")
 				currRetries += 1
 				continue

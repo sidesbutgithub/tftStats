@@ -85,14 +85,22 @@ func (crawlerInst *Crawler) AddPlayerIfNotVisited(puuid string) (bool, error) {
 func (crawlerInst *Crawler) GetMatchDataFromMatchID(matchID string) {
 	reqAddress := fmt.Sprintf("https://americas.api.riotgames.com/tft/match/v1/matches/%s?api_key=%s", matchID, crawlerInst.RiotApiKey)
 
-	err := crawlerInst.Rl.Wait(context.Background())
+	_, err := crawlerInst.Rdb.Client.BLPop(context.Background(), 0, "rateQueue2").Result()
 	if err != nil {
-		log.Print("failed to wait for rate limit")
+		log.Print("failed to wait for rate limit 2")
 		log.Print(err)
+		return
 	}
+	_, err = crawlerInst.Rdb.Client.BLPop(context.Background(), 0, "rateQueue1").Result()
+	if err != nil {
+		log.Print("failed to wait for rate limit 1")
+		log.Print(err)
+		return
+	}
+
 	b, err := utils.HandleHttpGetReqWithRetries(reqAddress, crawlerInst.MaxRetries)
 	if err != nil {
-		log.Print("Failed to get response body")
+		log.Print("Failed to get match, skipping")
 		log.Print(err)
 		return
 	}
@@ -142,15 +150,22 @@ func (crawlerInst *Crawler) GetMatchDataFromMatchID(matchID string) {
 func (crawlerInst *Crawler) GetMatchesFromPuuid(puuid string) {
 	reqAddress := fmt.Sprintf("https://americas.api.riotgames.com/tft/match/v1/matches/by-puuid/%s/ids?start=0&start=0&startTime=%s&count=20&api_key=%s", puuid, crawlerInst.MatchesStartTime, crawlerInst.RiotApiKey)
 
-	err := crawlerInst.Rl.Wait(context.Background())
+	_, err := crawlerInst.Rdb.Client.BLPop(context.Background(), 0, "rateQueue2").Result()
 	if err != nil {
-		log.Print("failed to wait for rate limit")
+		log.Print("failed to wait for rate limit 2")
+		log.Fatal(err)
+		return
+	}
+	_, err = crawlerInst.Rdb.Client.BLPop(context.Background(), 0, "rateQueue1").Result()
+	if err != nil {
+		log.Print("failed to wait for rate limit 1")
 		log.Print(err)
+		return
 	}
 
 	b, err := utils.HandleHttpGetReqWithRetries(reqAddress, crawlerInst.MaxRetries)
 	if err != nil {
-		log.Print("Failed to get response body")
+		log.Print("Failed to get match, skipping")
 		log.Print(err)
 		return
 	}
