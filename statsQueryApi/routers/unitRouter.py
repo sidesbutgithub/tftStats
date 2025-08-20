@@ -2,8 +2,8 @@ from fastapi import APIRouter, Query, Request
 from typing import Annotated
 
 router = APIRouter(
-    prefix="/listUnits",
-    tags=["listUnits"],
+    prefix="/units",
+    tags=["units"],
     responses={404: {"Msg":"Resource Not Found"}},
 )
 

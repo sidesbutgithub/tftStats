@@ -2,8 +2,8 @@ from fastapi import APIRouter, Query, Request
 from typing import Annotated
 
 router = APIRouter(
-    prefix="/listItems",
-    tags=["listItems"],
+    prefix="/items",
+    tags=["items"],
     responses={404: {"Msg":"Resource Not Found"}},
 )
 
@@ -24,7 +24,7 @@ async def getAllItems(req: Request, items: Annotated[list[str], Query()]=[]):
     return db.fetchall()
 
 @router.get("/{unitname}")
-async def getItemsForUnit(req: Request, unitname: str, starLevel: int = 0, items: Annotated[list[str], Query()] = []):
+async def getItemsForUnit(req: Request, unitname:str, starLevel: int = 0, items: Annotated[list[str], Query()] = []):
     db = req.app.state.cursor
     if starLevel == 0:
         db.execute('''

@@ -1,5 +1,5 @@
 # Teamfight Tactics(TFT) Stats
-An application to gather statistics about units from the Riot Games API for the strategy game Teamfight Tactics
+An application to collect statistics about units from the Riot Games API for the strategy game Teamfight Tactics
 
 
 ## Prerequisites
@@ -35,5 +35,39 @@ docker-compose up --build --scale matchcrawler=<desired number of match crawler 
 ```
 
 ## Routes
-
-### TODO
+```
+/avp
+```
+Responds with the Average Placement(AVP) of units matching the provided parameters
+**Parameters:**
+- unitName: the internal name of that unit, e.g. `"TFT15_Gwen"`
+- starLevel: the star level of that unit (if unitName is not provided, starLevel has no effect)
+- items: an array of internal item names e.g. `"TFT_Item_BlueBuff"`, since the api is written in FastAPI, to include multiple items, repeat the items param with another item, e.g. `items="TFT_Item_BlueBuff"&items="TFT_Item_RedBuff"` (using param items without unitName or starLevel is allowed)
+```
+/items
+```
+Responds with a list all the items, their AVP and the number of times they occured
+**Parameters**
+- items: an array of internal item names, filters the data to provide item statistics based on if the item was on the same unit as the param item names
+```
+/items/{unitname}
+```
+Responds with a list of items and their AVP and occurance count, in ascending order of AVP, if they match the provided parameters
+**Parameters**
+- starLevel: filters the data to items on units of unitname of the starlevel
+- items
+```
+/units
+```
+Responds with a list of units, their AVP and occurance count, in ascending order of AVP, if they match the parameters
+**Parameters**
+- items: filters the data to units which held the items in the param
+```
+/builds
+```
+Responds with a list of builds(unit name, star level and items held), their AVP and occurance count, in ascending order of AVP, if they match the provided parameters
+**Parameters**
+- unitName
+- starLevel
+- items
+- minGames: Default 10, minimum games a build must have been played for it to be included in the response
