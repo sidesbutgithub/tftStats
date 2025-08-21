@@ -2,6 +2,8 @@
 An application to collect statistics about units from the Riot Games API for the strategy game Teamfight Tactics
 
 ## Architecture
+Here is an image showcasing the project architecture  
+Each service has its own README if you want to know more about their individual functions and how they accomplish them
 ![Image showcasing project architecture](architectureDiagram.jpg)
 
 

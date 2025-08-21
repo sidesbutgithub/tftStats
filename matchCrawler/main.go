@@ -11,7 +11,6 @@ import (
 	"github.com/sidesbutgithub/tftStats/matchCrawler/internal/crawler"
 	"github.com/sidesbutgithub/tftStats/matchCrawler/internal/database"
 	"github.com/sidesbutgithub/tftStats/matchCrawler/internal/databaseClients"
-	"golang.org/x/time/rate"
 )
 
 func main() {
@@ -64,7 +63,6 @@ func main() {
 	matchCrawler := &crawler.Crawler{
 		Mu:               &sync.Mutex{},
 		Wg:               &sync.WaitGroup{},
-		Rl:               rate.NewLimiter(rate.Limit(float64(100)/float64(120)), 1),
 		Rdb:              &Rdb,
 		CurrData:         make([]database.BulkInsertUnitsParams, 0),
 		MatchesStartTime: os.Getenv("START_TIME"),

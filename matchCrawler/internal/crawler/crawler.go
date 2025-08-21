@@ -12,7 +12,6 @@ import (
 	"github.com/sidesbutgithub/tftStats/matchCrawler/internal/databaseClients"
 	"github.com/sidesbutgithub/tftStats/matchCrawler/internal/models"
 	"github.com/sidesbutgithub/tftStats/matchCrawler/internal/utils"
-	"golang.org/x/time/rate"
 )
 
 //store data locally before writing as bulk insert queries significantly faster
@@ -20,7 +19,6 @@ import (
 type Crawler struct {
 	Mu *sync.Mutex
 	Wg *sync.WaitGroup
-	Rl *rate.Limiter
 
 	Rdb              *databaseClients.RedisDB
 	CurrData         []database.BulkInsertUnitsParams
