@@ -1,6 +1,9 @@
 # Teamfight Tactics(TFT) Stats
 An application to collect statistics about units from the Riot Games API for the strategy game Teamfight Tactics
 
+## Architecture
+![Image showcasing project architecture](architectureDiagram.jpg)
+
 
 ## Prerequisites
 1. A Riot Games API Key
@@ -15,7 +18,6 @@ Clone the repo with `git clone https://github.com/sidesbutgithub/tftStats.git` a
 ```
 git clone https://github.com/sidesbutgithub/tftStats.git
 cd tftStats
-docker-compose up --build --scale matchcrawler=<your desired number of crawler containers> <-d if you want it to run detatched>
 ```
 ### .env
 create a file named `.env` in the root directory of the project with the following environment variables to be used by the program
@@ -40,9 +42,9 @@ docker-compose up --build --scale matchcrawler=<desired number of match crawler 
 ```
 Responds with the Average Placement(AVP) of units matching the provided parameters
 **Parameters:**
-- unitName: the internal name of that unit, e.g. `"TFT15_Gwen"`
+- unitName: the internal name of that unit, e.g. `TFT15_Gwen`
 - starLevel: the star level of that unit (if unitName is not provided, starLevel has no effect)
-- items: an array of internal item names e.g. `"TFT_Item_BlueBuff"`, since the api is written in FastAPI, to include multiple items, repeat the items param with another item, e.g. `items="TFT_Item_BlueBuff"&items="TFT_Item_RedBuff"` (using param items without unitName or starLevel is allowed)
+- items: an array of internal item names e.g. `TFT_Item_BlueBuff`, since the api is written in FastAPI, to include multiple items, repeat the items param with another item, e.g. `items=TFT_Item_BlueBuff&items=TFT_Item_RedBuff` (using param items without unitName or starLevel is allowed)
 ```
 /items
 ```
